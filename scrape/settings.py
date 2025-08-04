@@ -26,17 +26,27 @@ ROBOTSTXT_OBEY = False
 
 # Proxy settings
 SCRAPEOPS_API_KEY = os.getenv("SCRAPEOPS_API_KEY")
-if not SCRAPEOPS_API_KEY or  SCRAPEOPS_API_KEY == "<YOUR_API_KEY>":
+if not SCRAPEOPS_API_KEY or SCRAPEOPS_API_KEY == "<YOUR_API_KEY>":
     raise Exception("SCRAPEOPS_API_KEY not set")
 SCRAPEOPS_PROXY_ENABLED = True
 DOWNLOADER_MIDDLEWARES = {
     "scrapeops_scrapy_proxy_sdk.scrapeops_scrapy_proxy_sdk.ScrapeOpsScrapyProxySdk": 725,
+    "scrapy_user_agents.middlewares.RandomUserAgentMiddleware": 400,
 }
 
+# Logging settings
+LOG_ENABLED = True
+LOG_LEVEL = "INFO"
+
+# Disable Scrapy's default logging format
+LOG_FORMAT = "[%(levelname)8s]: %(message)s"
+LOG_FILE = "parser.log"
+
 # Concurrency and throttling settings
-# CONCURRENT_REQUESTS = 16
-CONCURRENT_REQUESTS_PER_DOMAIN = 1
-DOWNLOAD_DELAY = 1
+CONCURRENT_REQUESTS = 8
+DOWNLOAD_DELAY = 2  # seconds between requests
+CONCURRENT_REQUESTS_PER_DOMAIN = 2
+AUTOTHROTTLE_ENABLED = True
 
 # Disable cookies (enabled by default)
 # COOKIES_ENABLED = False
