@@ -30,9 +30,9 @@ if not SCRAPEOPS_API_KEY or SCRAPEOPS_API_KEY == "<YOUR_API_KEY>":
     raise Exception("SCRAPEOPS_API_KEY not set")
 SCRAPEOPS_PROXY_ENABLED = True
 DOWNLOADER_MIDDLEWARES = {
-    "scrapeops_scrapy_proxy_sdk.scrapeops_scrapy_proxy_sdk.ScrapeOpsScrapyProxySdk": 725,
     "scrapy_user_agents.middlewares.RandomUserAgentMiddleware": 400,
-    'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
+    "scrapeops_scrapy_proxy_sdk.scrapeops_scrapy_proxy_sdk.ScrapeOpsScrapyProxySdk": 725,
+    "scrapy.downloadermiddlewares.useragent.UserAgentMiddleware": None,
 }
 
 # Logging settings
