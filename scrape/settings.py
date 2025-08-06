@@ -11,6 +11,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+PROXY_USER = os.getenv("PROXY_USER")
+PROXY_PASS = os.getenv("PROXY_PASS")
+
 BOT_NAME = "scrape"
 
 SPIDER_MODULES = ["scrape.spiders"]
@@ -25,14 +28,19 @@ ADDONS = {}
 ROBOTSTXT_OBEY = False
 
 # Proxy settings
-SCRAPEOPS_API_KEY = os.getenv("SCRAPEOPS_API_KEY")
-if not SCRAPEOPS_API_KEY or SCRAPEOPS_API_KEY == "<YOUR_API_KEY>":
-    raise Exception("SCRAPEOPS_API_KEY not set")
-SCRAPEOPS_PROXY_ENABLED = True
+from pathlib import Path
+import json
+
+data = json.loads(Path("proxies.json").read_text())
+ROTATING_PROXY_LIST = [
+    f"http://{PROXY_USER}:{PROXY_PASS}@{item['entryPoint']}:{item['port']}"
+    for item in data
+]
+
 DOWNLOADER_MIDDLEWARES = {
-    "scrapy_user_agents.middlewares.RandomUserAgentMiddleware": 400,
-    "scrapeops_scrapy_proxy_sdk.scrapeops_scrapy_proxy_sdk.ScrapeOpsScrapyProxySdk": 725,
-    "scrapy.downloadermiddlewares.useragent.UserAgentMiddleware": None,
+    "scrapy.downloadermiddlewares.useragent.UserAgentMiddleware": 400,
+    "rotating_proxies.middlewares.RotatingProxyMiddleware": 610,
+    "rotating_proxies.middlewares.BanDetectionMiddleware": 620,
 }
 
 # Logging settings
@@ -44,9 +52,9 @@ LOG_FORMAT = "[%(levelname)8s]: %(message)s"
 LOG_FILE = "parser.log"
 
 # Concurrency and throttling settings
-CONCURRENT_REQUESTS = 8
+# CONCURRENT_REQUESTS = 8
 DOWNLOAD_DELAY = 2  # seconds between requests
-CONCURRENT_REQUESTS_PER_DOMAIN = 2
+CONCURRENT_REQUESTS_PER_DOMAIN = 1
 AUTOTHROTTLE_ENABLED = True
 
 # Disable cookies (enabled by default)
