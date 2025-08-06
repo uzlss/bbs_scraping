@@ -8,6 +8,8 @@
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 import os
 from dotenv import load_dotenv
+from pathlib import Path
+import json
 
 load_dotenv()
 
@@ -28,10 +30,8 @@ ADDONS = {}
 ROBOTSTXT_OBEY = False
 
 # Proxy settings
-from pathlib import Path
-import json
 
-data = json.loads(Path("proxies.json").read_text())
+data = json.loads(Path("proxy.json").read_text())
 ROTATING_PROXY_LIST = [
     f"http://{PROXY_USER}:{PROXY_PASS}@{item['entryPoint']}:{item['port']}"
     for item in data
