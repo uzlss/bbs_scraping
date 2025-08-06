@@ -34,7 +34,7 @@ functions = [
 ]
 
 
-def extract_requirements(job_text: str):
+def extract(job_text: str):
     """ChatGTP writes a function for ChatGPT"""
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -129,6 +129,6 @@ if __name__ == "__main__":
     
     Salary: From 4200 EUR/month (gross), based on experience and competence
     """
-    result = extract_requirements(job_desc)
+    result = extract(job_desc)
     print(result)
     # → {'required_skills': [...], 'years_experience': 5}

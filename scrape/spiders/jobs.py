@@ -5,7 +5,7 @@ from scrapy.http import Response
 from urllib.parse import quote_plus
 
 from scrape.items import JobItem
-from analyze.skill import extract_requirements
+from analyze.requirements import extract
 
 
 class JobsSpider(scrapy.Spider):
@@ -76,7 +76,7 @@ class JobsSpider(scrapy.Spider):
         text_nodes = desc_container.xpath(".//text()").getall()
         cleaned = [t.strip() for t in text_nodes if t.strip()]
         job_description = " ".join(cleaned)
-        requirements = extract_requirements(job_description)
+        requirements = extract(job_description)
         item["skills"] = requirements.get("required_skills", [])
         item["years_of_experience"] = requirements.get("years_experience", 0)
         logging.info(f"Returning required skills ({requirements})")
