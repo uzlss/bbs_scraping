@@ -14,3 +14,4 @@ class JobItem(scrapy.Item):
 
     detail_link = scrapy.Field()
     skills = scrapy.Field()
+    years_of_experience = scrapy.Field()
