@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import scrapy
 from scrapy.http import Response
@@ -11,13 +12,33 @@ from analyze.requirements import extract
 class JobsSpider(scrapy.Spider):
     name = "jobs"
     tpr = "r86400"  # 86,400 seconds = 1 day
-    # allowed_domains = ["linkedin.com", "www.linkedin.com"]
     start_url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?"
 
     def __init__(self, role="Developer", location=None, *args, **kwargs):
         super(JobsSpider, self).__init__(*args, **kwargs)
         self.role = role
         self.location = location
+
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        output_dir = Path("data")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        spider = super().from_crawler(crawler, *args, **kwargs)
+
+        role = kwargs.get("role", "output")
+        filename = output_dir / f"{role}.csv"
+
+        # Override FEEDS so Scrapy writes to <role>.csv
+        crawler.settings.set(
+            "FEEDS",
+            {
+                filename: {"format": "csv"},
+            },
+            priority="cmdline",
+        )
+
+        return spider
 
     def build_url(self, start: int) -> str:
         role_query = quote_plus(self.role)
@@ -40,6 +61,7 @@ class JobsSpider(scrapy.Spider):
             logging.info(f"No jobs found -> stopping. (start={start})")
             return
 
+        logging.info(f"Fetching page (start={start})")
         for job in jobs:
             detail_link = (
                 job.css(".base-card__full-link::attr(href)").get(default="").strip()
@@ -63,12 +85,11 @@ class JobsSpider(scrapy.Spider):
                     detail_link, callback=self.parse_skills, cb_kwargs={"item": item}
                 )
 
-        next_start = start + 25
-        logging.info(f"Fetching next page (start={next_start})")
+        start = start + 25
         yield scrapy.Request(
-            url=self.build_url(start=next_start),
+            url=self.build_url(start=start),
             callback=self.parse,
-            cb_kwargs={"start": next_start},
+            cb_kwargs={"start": start},
         )
 
     def parse_skills(self, response: Response, item: JobItem):
