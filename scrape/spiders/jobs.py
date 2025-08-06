@@ -4,30 +4,20 @@ import scrapy
 from scrapy.http import Response
 from urllib.parse import quote_plus
 
-from langdetect import detect, LangDetectException
-from nltk.corpus import stopwords
-from nltk import word_tokenize, pos_tag, download
-
 from scrape.items import JobItem
+from analyze.skill import extract_requirements
 
-"""
-Prerequisites:
-  pip install nltk langdetect
-  python -m nltk.downloader punkt averaged_perceptron_tagger stopwords
-NLTK data should be installed once in the environment (not on every import)
-"""
 
 class JobsSpider(scrapy.Spider):
     name = "jobs"
     tpr = "r86400"  # 86,400 seconds = 1 day
-    allowed_domains = ["linkedin.com", "www.linkedin.com"]
+    # allowed_domains = ["linkedin.com", "www.linkedin.com"]
     start_url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?"
 
     def __init__(self, role="Developer", location=None, *args, **kwargs):
         super(JobsSpider, self).__init__(*args, **kwargs)
         self.role = role
         self.location = location
-        self.stop_words = set(stopwords.words('english'))
 
     def build_url(self, start: int) -> str:
         role_query = quote_plus(self.role)
@@ -37,7 +27,7 @@ class JobsSpider(scrapy.Spider):
             url += f"&location={location_query}"
         return url
 
-    def start_requests(self):
+    async def start(self):
         logging.info(f"Spider started (role={self.role}, location={self.location})")
         url = self.build_url(start=0)
         yield scrapy.Request(url=url, callback=self.parse, cb_kwargs={"start": 0})
@@ -52,9 +42,7 @@ class JobsSpider(scrapy.Spider):
 
         for job in jobs:
             detail_link = (
-                job.css(".base-card__full-link::attr(href)")
-                .get(default="")
-                .strip()
+                job.css(".base-card__full-link::attr(href)").get(default="").strip()
             )
 
             item = JobItem(
@@ -68,6 +56,7 @@ class JobsSpider(scrapy.Spider):
                 .strip(),
                 detail_link=detail_link,
                 skills=[],
+                years_of_experience=None,
             )
             if detail_link:
                 yield response.follow(
@@ -83,22 +72,13 @@ class JobsSpider(scrapy.Spider):
         )
 
     def parse_skills(self, response: Response, item: JobItem):
-        desc_sel = response.css(
-            "div.description__text--rich section.show-more-less-html__markup"
-        )
-        description = " ".join(desc_sel.css("*::text").getall()).strip()
+        desc_container = response.css("div.show-more-less-html__markup")
+        text_nodes = desc_container.xpath(".//text()").getall()
+        cleaned = [t.strip() for t in text_nodes if t.strip()]
+        job_description = " ".join(cleaned)
+        requirements = extract_requirements(job_description)
+        item["skills"] = requirements.get("required_skills", [])
+        item["years_of_experience"] = requirements.get("years_experience", 0)
+        logging.info(f"Returning required skills ({requirements})")
 
-        # language detection
-        try:
-            lang = detect(description)
-        except LangDetectException:
-            return
-        if lang != 'en':
-            return
-
-        tokens = word_tokenize(description)
-        tagged = pos_tag(tokens)
-        candidates = [w.lower() for w,p in tagged if p.startswith('NN')]
-        skills = [w for w in set(candidates) if w not in self.stop_words and len(w)>1]
-        item['skills'] = skills
         yield item

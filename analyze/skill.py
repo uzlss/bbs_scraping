@@ -1,5 +1,4 @@
 import os
-import re
 import json
 from dotenv import load_dotenv
 
@@ -62,11 +61,6 @@ def extract_requirements(job_text: str):
     args = json.loads(fn_call.arguments)
 
     # Post‐processing: if GPT gave 0 but there's an 'experience' mention, bump to 1
-    if args.get("years_experience", 0) == 0:
-        # looks for words like "experience", "experienced", etc.
-        if re.search(r"\bexperience\b", job_text, re.IGNORECASE):
-            args["years_experience"] = 1
-
     return args
 
 
