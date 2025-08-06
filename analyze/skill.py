@@ -47,7 +47,8 @@ def extract_requirements(job_text: str):
                     "years_experience (integer).  "
                     "If it mentions X years of experience use X; "
                     "if it says 'experience' but gives no number, return 1; "
-                    "if no experience requirement at all, return 0."
+                    "if no experience requirement at all, return 0.  "
+                    "Strip any leading or trailing whitespace from each skill name before adding it to required_skills."
                 ),
             },
             {"role": "user", "content": job_text},
