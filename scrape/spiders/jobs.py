@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 from pathlib import Path
 
 import scrapy
@@ -11,6 +12,7 @@ from analyze.requirements import extract
 
 class JobsSpider(scrapy.Spider):
     name = "jobs"
+    handle_httpstatus_list = [400]
     tpr = "r86400"  # 86,400 seconds = 1 day
     start_url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?"
 
@@ -21,21 +23,22 @@ class JobsSpider(scrapy.Spider):
 
     @classmethod
     def from_crawler(cls, crawler, *args, **kwargs):
-        output_dir = Path("data")
-        output_dir.mkdir(parents=True, exist_ok=True)
-
         spider = super().from_crawler(crawler, *args, **kwargs)
 
-        role = kwargs.get("role", "output")
-        filename = output_dir / f"{role}.csv"
+        role_slug = spider.role.replace(" ", "_")
 
-        # Override FEEDS so Scrapy writes to <role>.csv
+        # build: data/<role_slug>/<YYYY-MM-DD>.csv
+        today_str = date.today().isoformat()  # e.g. "2025-08-07"
+        output_dir = Path("data") / role_slug
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        output_file = output_dir / f"{today_str}.csv"
+
+        # tell Scrapy to use this path for FEEDS
         crawler.settings.set(
             "FEEDS",
-            {
-                filename: {"format": "csv"},
-            },
-            priority="cmdline",
+            { str(output_file): {"format": "csv"} },
+            priority="cmdline"
         )
 
         return spider
@@ -55,9 +58,10 @@ class JobsSpider(scrapy.Spider):
 
     def parse(self, response: Response, start: int, **kwargs):  # noqa
         jobs = response.css("li")
+
         num_jobs = len(jobs)
 
-        if not num_jobs:
+        if response.status == 400 or not num_jobs:
             logging.info(f"No jobs found -> stopping. (start={start})")
             return
 
@@ -92,12 +96,12 @@ class JobsSpider(scrapy.Spider):
             cb_kwargs={"start": start},
         )
 
-    def parse_skills(self, response: Response, item: JobItem):
+    async def parse_skills(self, response: Response, item: JobItem):
         desc_container = response.css("div.show-more-less-html__markup")
         text_nodes = desc_container.xpath(".//text()").getall()
         cleaned = [t.strip() for t in text_nodes if t.strip()]
         job_description = " ".join(cleaned)
-        requirements = extract(job_description)
+        requirements = await extract(job_description)
         item["skills"] = requirements.get("required_skills", [])
         item["years_of_experience"] = requirements.get("years_experience", 0)
         logging.info(f"Returning required skills ({requirements})")

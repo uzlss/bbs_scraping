@@ -52,9 +52,9 @@ LOG_FORMAT = "[%(levelname)8s]: %(message)s"
 LOG_FILE = "parser.log"
 
 # Concurrency and throttling settings
-# CONCURRENT_REQUESTS = 8
+CONCURRENT_REQUESTS = 4
 DOWNLOAD_DELAY = 2  # seconds between requests
-CONCURRENT_REQUESTS_PER_DOMAIN = 1
+CONCURRENT_REQUESTS_PER_DOMAIN = 2
 AUTOTHROTTLE_ENABLED = True
 
 # Disable cookies (enabled by default)

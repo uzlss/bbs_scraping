@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 from dotenv import load_dotenv
@@ -7,9 +8,9 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
-client = OpenAI()
+client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 functions = [
     {
@@ -34,9 +35,9 @@ functions = [
 ]
 
 
-def extract(job_text: str):
+async def extract(job_text: str):
     """ChatGTP writes a function for ChatGPT"""
-    resp = client.chat.completions.create(
+    resp = await client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {
@@ -129,6 +130,6 @@ if __name__ == "__main__":
     
     Salary: From 4200 EUR/month (gross), based on experience and competence
     """
-    result = extract(job_desc)
+    result = asyncio.run(extract(job_desc))
     print(result)
     # → {'required_skills': [...], 'years_experience': 5}
