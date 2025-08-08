@@ -7,6 +7,8 @@ import unicodedata
 from typing import Dict, Optional
 
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")           # headless backend (no Tk needed)
 import matplotlib.pyplot as plt
 import geopandas as gpd
 from pandas.api.types import is_scalar
