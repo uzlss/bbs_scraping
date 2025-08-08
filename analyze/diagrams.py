@@ -1,49 +1,41 @@
-# diagrams.py
+# analyze/diagrams.py
 import os
 import re
+import ast
+import logging
 import unicodedata
-from typing import Dict, Optional, Iterable
+from typing import Dict, Optional
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import geopandas as gpd
 from pandas.api.types import is_scalar
 
+logger = logging.getLogger(__name__)
+
 
 # ==================== Text Normalization ====================
 def _normalize_text(s: str) -> str:
-    """
-    Normalize for fuzzy matching:
-      - Unicode NFKD + strip accents
-      - lowercase
-      - remove punctuation and extra spaces
-    """
     if s is None:
         return ""
     s = unicodedata.normalize("NFKD", str(s))
     s = "".join(ch for ch in s if not unicodedata.combining(ch))
     s = s.lower().strip()
-    s = re.sub(r"[^\w\s]", " ", s)      # drop punctuation
-    s = re.sub(r"\s+", " ", s)          # collapse spaces
+    s = re.sub(r"[^\w\s]", " ", s)
+    s = re.sub(r"\s+", " ", s)
     return s
 
 
 # ==================== World Geometry (no deprecated datasets) ====================
 def read_world_countries() -> gpd.GeoDataFrame:
-    """
-    Avoid removed GeoPandas sample datasets. Use a lightweight GeoJSON.
-    Replace with a local Natural Earth path if you prefer offline.
-    """
     url = "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson"
     return gpd.read_file(url)
 
 
 def pick_country_name_column(world: gpd.GeoDataFrame) -> str:
-    # Prefer common name columns if available
     for c in ["ADMIN", "NAME_EN", "NAME", "name", "formal_en"]:
         if c in world.columns:
             return c
-    # fallback to the first object dtype column
     for c in world.columns:
         if world[c].dtype == object:
             return c
@@ -51,24 +43,17 @@ def pick_country_name_column(world: gpd.GeoDataFrame) -> str:
 
 
 def build_country_lookup(world: gpd.GeoDataFrame) -> Dict[str, str]:
-    """
-    Build a normalized -> canonical country name lookup.
-    Only use scalar (non-list/non-dict) string-like values to avoid ambiguous truth
-    value errors from pandas on array-like objects.
-    """
     name_col = pick_country_name_column(world)
     candidate_cols = [name_col] + [
         c for c in world.columns if c != name_col and world[c].dtype == object
     ]
 
     lookup: Dict[str, str] = {}
-
     for _, row in world[candidate_cols].iterrows():
         canonical = str(row[name_col]).strip()
         if not canonical:
             continue
 
-        # Add all scalar string-like values
         for c in candidate_cols:
             val = row[c]
             if not is_scalar(val):
@@ -80,7 +65,6 @@ def build_country_lookup(world: gpd.GeoDataFrame) -> Dict[str, str]:
             if key:
                 lookup[key] = canonical
 
-        # Ensure canonical (normalized) itself is present
         key_canon = _normalize_text(canonical)
         if key_canon:
             lookup[key_canon] = canonical
@@ -89,6 +73,29 @@ def build_country_lookup(world: gpd.GeoDataFrame) -> Dict[str, str]:
 
 
 # ==================== CSV Loading ====================
+def _parse_skills_cell(x) -> str:
+    """
+    Accepts:
+      - a list -> join with commas
+      - a string list repr, e.g. "['Python','Django']" -> parse with ast.literal_eval
+      - a plain comma-separated string
+    Returns a clean comma-separated string (may be empty).
+    """
+    if isinstance(x, list):
+        return ", ".join(map(str, x))
+    if isinstance(x, str):
+        s = x.strip()
+        if s.startswith("[") and s.endswith("]"):
+            try:
+                lst = ast.literal_eval(s)
+                if isinstance(lst, list):
+                    return ", ".join(map(str, lst))
+            except Exception:
+                pass
+        return s
+    return ""
+
+
 def load_jobs_csv(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     expected = {"skills", "years_of_experience", "location"}
@@ -96,42 +103,27 @@ def load_jobs_csv(csv_path: str) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
-    df["skills"] = df["skills"].fillna("").astype(str)
+    df["skills"] = df["skills"].apply(_parse_skills_cell).fillna("")
     df["location"] = df["location"].fillna("").astype(str)
     return df
 
 
 # ==================== Country Inference ====================
 def infer_country_from_location(
-    location: str,
-    country_lookup: Dict[str, str],
-    *,
-    allow_us_state_guess: bool = False
+    location: str, country_lookup: Dict[str, str], *, allow_us_state_guess: bool = False
 ) -> Optional[str]:
-    """
-    Parse a free-form location string and try to resolve a country.
-    Strategy:
-      - Try the full string.
-      - Split by commas and scan right->left; first token that matches a country wins.
-      - No US-specific guessing by default. If `allow_us_state_guess=True`, we
-        will treat 2-letter ALLCAP tokens (e.g., 'CA','NY') as 'United States' (conservative).
-    """
     if not location:
         return None
 
-    # Full string pass
     full_key = _normalize_text(location)
     if full_key in country_lookup:
         return country_lookup[full_key]
 
-    # Token pass (right to left)
     tokens = [t.strip() for t in str(location).split(",") if t.strip()]
     for token in reversed(tokens):
         key = _normalize_text(token)
         if key in country_lookup:
             return country_lookup[key]
-
-        # Optional conservative US-state hint (OFF by default)
         if allow_us_state_guess and re.fullmatch(r"[A-Z]{2}", token):
             us_key = _normalize_text("United States")
             return country_lookup.get(us_key, "United States")
@@ -185,16 +177,12 @@ def plot_experience_levels(df: pd.DataFrame, out_path: str) -> str:
 
 
 def plot_country_heatmap(
-    df: pd.DataFrame,
-    out_path: str,
-    *,
-    allow_us_state_guess: bool = False
+    df: pd.DataFrame, out_path: str, *, allow_us_state_guess: bool = False
 ) -> str:
     world = read_world_countries()
     country_lookup = build_country_lookup(world)
     name_col = pick_country_name_column(world)
 
-    # Resolve countries row-by-row without hard-coded lists
     countries = df["location"].apply(
         lambda loc: infer_country_from_location(
             loc, country_lookup, allow_us_state_guess=allow_us_state_guess
@@ -202,13 +190,10 @@ def plot_country_heatmap(
     )
     df_countries = countries.dropna()
     if df_countries.empty:
-        # Optional: print some samples to help debugging
-        # print("Unmatched location samples:\n", df["location"][countries.isna()].head(20).to_string(index=False))
         raise ValueError("No resolvable countries from 'location' values to plot.")
 
     country_counts = df_countries.value_counts()
 
-    # Prepare join
     world["_join_name"] = world[name_col].astype(str).str.strip().str.lower()
     cc = country_counts.rename_axis("country").reset_index(name="job_count")
     cc["_join_name"] = cc["country"].str.strip().str.lower()
@@ -233,24 +218,45 @@ def plot_country_heatmap(
 
 
 # ==================== Orchestrator ====================
-def make_all_charts(csv_path: str, out_dir: str = ".", *, allow_us_state_guess: bool = False) -> None:
+def make_all_charts(
+    csv_path: str, out_dir: str, *, allow_us_state_guess: bool = False
+) -> None:
+    """
+    Save all outputs directly in out_dir (no subfolders).
+    """
     os.makedirs(out_dir, exist_ok=True)
     df = load_jobs_csv(csv_path)
 
-    print("→ Building Top Skills…")
-    print("   saved:", plot_top_skills(df, os.path.join(out_dir, "top_skills.png")))
+    logger.info("→ Building Top Skills…")
+    logger.info(
+        "   saved: %s", plot_top_skills(df, os.path.join(out_dir, "top_skills.png"))
+    )
 
-    print("→ Building Experience Levels…")
-    print("   saved:", plot_experience_levels(df, os.path.join(out_dir, "experience_levels.png")))
+    logger.info("→ Building Experience Levels…")
+    logger.info(
+        "   saved: %s",
+        plot_experience_levels(df, os.path.join(out_dir, "experience_levels.png")),
+    )
 
-    print("→ Building Country Heatmap…")
-    print("   saved:", plot_country_heatmap(
-        df,
-        os.path.join(out_dir, "location_heatmap.png"),
-        allow_us_state_guess=allow_us_state_guess
-    ))
+    logger.info("→ Building Country Heatmap…")
+    logger.info(
+        "   saved: %s",
+        plot_country_heatmap(
+            df,
+            os.path.join(out_dir, "location_heatmap.png"),
+            allow_us_state_guess=allow_us_state_guess,
+        ),
+    )
 
 
 if __name__ == "__main__":
-    # Example path — adjust as needed
-    make_all_charts("../data/vibe_coder/2025-08-07.csv", out_dir=".", allow_us_state_guess=False)
+    # Standalone run: show logs in console
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    )
+    # Example: put results in data/Developer/2025-08-07/
+    make_all_charts(
+        "../data/vibe_coder/2025-08-07/jobs.csv",
+        out_dir="../data/vibe_coder/2025-08-07",
+        allow_us_state_guess=False,
+    )
