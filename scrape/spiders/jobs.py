@@ -1,4 +1,3 @@
-# scrape/spiders/jobs.py
 import logging
 import time
 from datetime import date
@@ -49,12 +48,20 @@ class JobsSpider(scrapy.Spider):
         # Export items into data/<role>/<date>/jobs.csv
         crawler.settings.set(
             "FEEDS",
-            {str(spider.output_file): {"format": "csv", "encoding": "utf-8", "overwrite": True}},
+            {
+                str(spider.output_file): {
+                    "format": "csv",
+                    "encoding": "utf-8",
+                    "overwrite": True,
+                }
+            },
             priority="cmdline",
         )
 
         # Run analytics AFTER feed export finishes.
-        feed_signal = getattr(signals, "feedexporter_closed", None) or signals.engine_stopped
+        feed_signal = (
+            getattr(signals, "feedexporter_closed", None) or signals.engine_stopped
+        )
         crawler.signals.connect(spider.on_feeds_ready, signal=feed_signal)
 
         return spider
@@ -82,12 +89,16 @@ class JobsSpider(scrapy.Spider):
 
         self.logger.info(f"Fetching page (start={start})")
         for job in jobs:
-            detail_link = job.css(".base-card__full-link::attr(href)").get(default="").strip()
+            detail_link = (
+                job.css(".base-card__full-link::attr(href)").get(default="").strip()
+            )
 
             item = JobItem(
                 title=job.css("h3::text").get(default="not-found").strip(),
                 company_name=job.css("h4 a::text").get(default="not-found").strip(),
-                location=job.css(".job-search-card__location::text").get(default="").strip(),
+                location=job.css(".job-search-card__location::text")
+                .get(default="")
+                .strip(),
                 listed_date=job.css("time::attr(datetime)").get(default="").strip(),
                 detail_link=detail_link,
                 skills=[],
@@ -129,7 +140,9 @@ class JobsSpider(scrapy.Spider):
                 self.logger.warning("No output CSV found — skipping analytics.")
                 return
 
-            self.logger.info(f"Running analytics for {self.output_file} -> {self.run_dir}")
+            self.logger.info(
+                f"Running analytics for {self.output_file} -> {self.run_dir}"
+            )
 
             attempts = 10
             delay_s = 0.5
@@ -145,7 +158,9 @@ class JobsSpider(scrapy.Spider):
                 except (EmptyDataError, ParserError):
                     if i == attempts:
                         raise
-                    self.logger.info("CSV not ready to parse yet; retrying (%s/%s)...", i, attempts)
+                    self.logger.info(
+                        "CSV not ready to parse yet; retrying (%s/%s)...", i, attempts
+                    )
                     time.sleep(delay_s)
 
         except Exception as e:
