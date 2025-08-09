@@ -273,5 +273,6 @@ poetry.toml
 
 # LSP config files
 pyrightconfig.json
-
+proxy.json
+*.csv
 # End of https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks,pycharm+all,dotenv
